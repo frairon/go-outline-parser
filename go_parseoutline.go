@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	g_input = flag.String("f", "", "file to parse")
+	g_input       = flag.String("f", "", "file to parse")
+	g_packageOnly = flag.Bool("p", "", "parse package only")
 )
 
 func show_usage() {
@@ -25,8 +26,11 @@ func main() {
 	if len(*g_input) == 0 {
 		retval = 1
 	} else {
-
-		retval = parseFile(*g_input)
+		if *g_packageOnly {
+			retval = parsePackage(*g_input)
+		} else {
+			retval = parseFile(*g_input)
+		}
 	}
 	if retval != 0 {
 		flag.Usage()
