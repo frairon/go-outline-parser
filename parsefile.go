@@ -9,9 +9,16 @@ import (
 	"os"
 )
 
-type Tree map[string]interface{}
+type Entry map[string]interface{}
 
-func newTree() Tree {
+type FileOutline struct {
+	Filename    string
+	Packagename string
+
+	Entries map[string]Entry
+}
+
+func newEntry() Entry {
 	return make(map[string]interface{})
 }
 
@@ -28,57 +35,54 @@ func getRealTypeName(expr ast.Expr) string {
 		return "UnknownReceiver"
 	}
 
-	//return nil
 }
 
-// func getFuncParameterNameList(funcElement *ast.FuncDecl) {
-// 	params := make([]string)
-// 	for i := 0; i < funcNode.Type.Params.NumFields(); i++ {
-// 		params = append(params, funcNode.Type.Params.List[0].Names[0])
-// 	}
-// }
-
-func (t Tree) Visit(node ast.Node) (w ast.Visitor) {
+func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 
 	switch node.(type) {
 	case *ast.FuncDecl:
 		funcNode := node.(*ast.FuncDecl)
-		funcTree := newTree()
-		funcTree["line"] = funcNode.Pos()
+		funcTree := newEntry()
+		funcTree["Line"] = funcNode.Pos()
 		if funcNode.Recv.NumFields() > 0 {
-			funcTree["receiver"] = getRealTypeName(funcNode.Recv.List[0].Type)
+			funcTree["Receiver"] = getRealTypeName(funcNode.Recv.List[0].Type)
 		}
-		funcTree["elemtype"] = "func"
-		funcTree["name"] = funcNode.Name.Name
-		funcTree["public"] = funcNode.Name.IsExported()
-		t[funcNode.Name.Name] = funcTree
+		funcTree["Elemtype"] = "func"
+		funcTree["Name"] = funcNode.Name.Name
+		funcTree["Public"] = funcNode.Name.IsExported()
+		o.Entries[funcNode.Name.Name] = funcTree
 
 	case *ast.TypeSpec:
 		typeNode := node.(*ast.TypeSpec)
-		typeTree := newTree()
+		typeTree := newEntry()
 
-		typeTree["name"] = typeNode.Name.Name
-		typeTree["elemtype"] = "type"
-		typeTree["public"] = typeNode.Name.IsExported()
+		typeTree["Name"] = typeNode.Name.Name
+		typeTree["Elemtype"] = "type"
+		typeTree["Public"] = typeNode.Name.IsExported()
 
-		t[typeNode.Name.Name] = typeTree
+		o.Entries[typeNode.Name.Name] = typeTree
 	}
-	return t
+	return o
 }
 
 func parseFile(inputFile string) int {
 	fset := token.NewFileSet()
 	tree, err := parser.ParseFile(fset, inputFile, nil, parser.AllErrors)
-
-	outputTree := newTree()
-	outputTree["file"] = inputFile
-
-	ast.Walk(&outputTree, tree)
-	if err == nil {
-		outputTree["package"] = tree.Name.Name
-		enc := json.NewEncoder(os.Stdout)
-		fmt.Println(enc.Encode(outputTree))
+	outline := FileOutline{
+		Entries: make(map[string]Entry),
 	}
 
-	return 0
+	outline.Filename = inputFile
+
+	ast.Walk(&outline, tree)
+	if err == nil {
+		outline.Packagename = tree.Name.Name
+		enc := json.NewEncoder(os.Stdout)
+		enc.Encode(outline)
+		return 0
+	}
+
+	fmt.Println("Error parsing go file.")
+	return 1
+
 }
