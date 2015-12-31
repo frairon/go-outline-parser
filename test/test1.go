@@ -5,6 +5,6 @@ func (f Foo) fooToExternal() {
 }
 
 // function receiver (nested receiver)
-func (ft fooToExternal) nestedReceiver() {
+func (ft Foo) nested_not_working() {
 
 }

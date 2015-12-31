@@ -9,7 +9,7 @@ func helloWorld() {
 
 }
 
-func (f *Foo) fooPointerMember() {
+func (f *Foo) fooPointerMember2() {
 
 }
 

@@ -12,6 +12,7 @@ import (
 type Entry map[string]interface{}
 
 type FileOutline struct {
+	FileSet     *token.FileSet `json:"-"`
 	Filename    string
 	Packagename string
 
@@ -43,7 +44,9 @@ func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 	case *ast.FuncDecl:
 		funcNode := node.(*ast.FuncDecl)
 		funcTree := newEntry()
-		funcTree["Line"] = funcNode.Pos()
+
+		o.setPosition(funcTree, funcNode.Pos())
+
 		if funcNode.Recv.NumFields() > 0 {
 			funcTree["Receiver"] = getRealTypeName(funcNode.Recv.List[0].Type)
 		}
@@ -60,9 +63,24 @@ func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 		typeTree["Elemtype"] = "type"
 		typeTree["Public"] = typeNode.Name.IsExported()
 
+		o.setPosition(typeTree, typeNode.Pos())
+
 		o.Entries[typeNode.Name.Name] = typeTree
 	}
 	return o
+}
+
+func (o *FileOutline) setPosition(entry Entry, pos token.Pos) {
+	entry["Line"] = 0
+	entry["Column"] = 0
+
+	if pos.IsValid() {
+		fpos := o.FileSet.Position(pos)
+		if fpos.IsValid() {
+			entry["Line"] = fpos.Line
+			entry["Column"] = fpos.Column
+		}
+	}
 }
 
 func parseFile(inputFile string) int {
@@ -70,6 +88,7 @@ func parseFile(inputFile string) int {
 	tree, err := parser.ParseFile(fset, inputFile, nil, parser.AllErrors)
 	outline := FileOutline{
 		Entries: make(map[string]Entry),
+		FileSet: fset,
 	}
 
 	outline.Filename = inputFile
