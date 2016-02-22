@@ -55,6 +55,9 @@ func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 		funcTree["Public"] = funcNode.Name.IsExported()
 		o.Entries[funcNode.Name.Name] = funcTree
 
+		// return nil so it does not recurse into functions
+		return nil
+
 	case *ast.TypeSpec:
 		typeNode := node.(*ast.TypeSpec)
 		typeTree := newEntry()
@@ -66,6 +69,18 @@ func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 		o.setPosition(typeTree, typeNode.Pos())
 
 		o.Entries[typeNode.Name.Name] = typeTree
+
+	case *ast.ValueSpec:
+		valueNode := node.(*ast.ValueSpec)
+
+		for _, name := range valueNode.Names {
+			valueTree := newEntry()
+			valueTree["Elemtype"] = "variable"
+			valueTree["Name"] = name.Name
+			o.setPosition(valueTree, name.Pos())
+			//fmt.Println(valueNode.Names)
+			o.Entries[name.Name] = valueTree
+		}
 	}
 	return o
 }
