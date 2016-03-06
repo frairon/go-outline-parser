@@ -45,7 +45,7 @@ func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 		funcNode := node.(*ast.FuncDecl)
 		funcTree := newEntry()
 
-		o.setPosition(funcTree, funcNode.Pos())
+		o.setPosition(funcTree, funcNode.Name.Pos())
 
 		if funcNode.Recv.NumFields() > 0 {
 			funcTree["Receiver"] = getRealTypeName(funcNode.Recv.List[0].Type)
