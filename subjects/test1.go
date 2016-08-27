@@ -1,10 +1,10 @@
-package sometest
+package subjects
 
 func (f Foo) fooToExternal() {
 
 }
 
 // function receiver (nested receiver)
-func (ft Foo) nested_not_working() {
+func (f Foo) nested_not_working() {
 
 }

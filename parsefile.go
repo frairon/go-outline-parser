@@ -1,26 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 )
 
-type Entry map[string]interface{}
+type Entry struct {
+	Elemtype string
+	Receiver string `json:",omitempty"`
+	Name     string
+	Public   bool
+	Line     int `json:",omitempty"`
+	Column   int `json:",omitempty"`
+}
 
 type FileOutline struct {
 	FileSet     *token.FileSet `json:"-"`
 	Filename    string
 	Packagename string
 
-	Entries map[string]Entry
+	Entries []*Entry
 }
 
-func newEntry() Entry {
-	return make(map[string]interface{})
+func newEntry() *Entry {
+	return new(Entry)
 }
 
 func getRealTypeName(expr ast.Expr) string {
@@ -38,85 +45,100 @@ func getRealTypeName(expr ast.Expr) string {
 
 }
 
-func (o FileOutline) Visit(node ast.Node) (w ast.Visitor) {
-
-	switch node.(type) {
+func (o *FileOutline) Visit(node ast.Node) (w ast.Visitor) {
+	switch typedNode := node.(type) {
 	case *ast.FuncDecl:
-		funcNode := node.(*ast.FuncDecl)
 		funcTree := newEntry()
 
-		o.setPosition(funcTree, funcNode.Name.Pos())
+		o.setPosition(funcTree, typedNode.Name.Pos())
 
-		if funcNode.Recv.NumFields() > 0 {
-			funcTree["Receiver"] = getRealTypeName(funcNode.Recv.List[0].Type)
+		if typedNode.Recv.NumFields() > 0 {
+			funcTree.Receiver = getRealTypeName(typedNode.Recv.List[0].Type)
 		}
-		funcTree["Elemtype"] = "func"
-		funcTree["Name"] = funcNode.Name.Name
-		funcTree["Public"] = funcNode.Name.IsExported()
-		o.Entries[funcNode.Name.Name] = funcTree
+		funcTree.Elemtype = "func"
+		funcTree.Name = typedNode.Name.Name
+		funcTree.Public = typedNode.Name.IsExported()
+		o.Entries = append(o.Entries, funcTree)
 
 		// return nil so it does not recurse into functions
 		return nil
-
+	// case *ast.InterfaceType:
+	// 	fmt.Printf("%+v", typedNode.Methods.List[0].Names)
+	// 	Interface
 	case *ast.TypeSpec:
-		typeNode := node.(*ast.TypeSpec)
 		typeTree := newEntry()
+		typeTree.Name = typedNode.Name.Name
+		typeTree.Elemtype = "type"
+		typeTree.Public = typedNode.Name.IsExported()
 
-		typeTree["Name"] = typeNode.Name.Name
-		typeTree["Elemtype"] = "type"
-		typeTree["Public"] = typeNode.Name.IsExported()
+		o.setPosition(typeTree, typedNode.Pos())
 
-		o.setPosition(typeTree, typeNode.Pos())
+		switch typedType := typedNode.Type.(type) {
+		case *ast.InterfaceType:
+			typeTree.Elemtype = "interface"
+			o.createMethodsForInterface(typedType, typedNode.Name.Name)
+		}
 
-		o.Entries[typeNode.Name.Name] = typeTree
+		o.Entries = append(o.Entries, typeTree)
 
 	case *ast.ValueSpec:
-		valueNode := node.(*ast.ValueSpec)
-
-		for _, name := range valueNode.Names {
+		for _, name := range typedNode.Names {
 			valueTree := newEntry()
-			valueTree["Elemtype"] = "variable"
-			valueTree["Name"] = name.Name
+			valueTree.Elemtype = "variable"
+			valueTree.Name = name.Name
 			o.setPosition(valueTree, name.Pos())
-			//fmt.Println(valueNode.Names)
-			o.Entries[name.Name] = valueTree
+			o.Entries = append(o.Entries, valueTree)
 		}
 	}
 	return o
 }
 
-func (o *FileOutline) setPosition(entry Entry, pos token.Pos) {
-	entry["Line"] = 0
-	entry["Column"] = 0
+func (o *FileOutline) createMethodsForInterface(iface *ast.InterfaceType, receiver string) {
+	for _, field := range iface.Methods.List {
+		if len(field.Names) < 1 {
+			continue
+		}
+		ifaceFunc := newEntry()
+		ifaceFunc.Name = field.Names[0].Name
+		ifaceFunc.Elemtype = "func"
+		ifaceFunc.Receiver = receiver
+		o.setPosition(ifaceFunc, field.Type.Pos())
+
+		o.Entries = append(o.Entries, ifaceFunc)
+	}
+}
+
+func (o *FileOutline) setPosition(entry *Entry, pos token.Pos) {
 
 	if pos.IsValid() {
 		fpos := o.FileSet.Position(pos)
 		if fpos.IsValid() {
-			entry["Line"] = fpos.Line
-			entry["Column"] = fpos.Column
+			entry.Line = fpos.Line
+			entry.Column = fpos.Column
 		}
 	}
 }
 
-func parseFile(inputFile string) int {
+func parseFile(inputFile string) (string, error) {
 	fset := token.NewFileSet()
 	tree, err := parser.ParseFile(fset, inputFile, nil, parser.AllErrors)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing the file: %v", err)
+	}
 	outline := FileOutline{
-		Entries: make(map[string]Entry),
 		FileSet: fset,
 	}
 
 	outline.Filename = inputFile
 
 	ast.Walk(&outline, tree)
-	if err == nil {
-		outline.Packagename = tree.Name.Name
-		enc := json.NewEncoder(os.Stdout)
-		enc.Encode(outline)
-		return 0
+
+	outline.Packagename = tree.Name.Name
+	output := bytes.Buffer{}
+	enc := json.NewEncoder(&output)
+	err = enc.Encode(outline)
+	if err != nil {
+		return "", fmt.Errorf("Error encoding the symbol tree: %v", err)
 	}
-
-	fmt.Println("Error parsing go file.")
-	return 1
-
+	return output.String(), nil
 }

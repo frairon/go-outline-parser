@@ -1,4 +1,4 @@
-package sometest
+package subjects
 
 type Foo struct {
 	Public    int
