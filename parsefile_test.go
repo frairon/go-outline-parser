@@ -18,7 +18,8 @@ func (oh outlineHelper) firstEntryByName(name string) *Entry {
 }
 
 type testType struct {
-	value int
+	value       int
+	structValue int
 }
 
 func (t *testType) foo() {
@@ -98,4 +99,9 @@ func assertEquals(t *testing.T, a, b interface{}) {
 	if a != b {
 		t.Errorf("%v does not equal %v", a, b)
 	}
+}
+
+type SomeInterface interface {
+	InterfaceFuncA(int)
+	InterfaceFuncB(int64)
 }

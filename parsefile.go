@@ -62,9 +62,6 @@ func (o *FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 
 		// return nil so it does not recurse into functions
 		return nil
-	// case *ast.InterfaceType:
-	// 	fmt.Printf("%+v", typedNode.Methods.List[0].Names)
-	// 	Interface
 	case *ast.TypeSpec:
 		typeTree := newEntry()
 		typeTree.Name = typedNode.Name.Name
@@ -77,6 +74,9 @@ func (o *FileOutline) Visit(node ast.Node) (w ast.Visitor) {
 		case *ast.InterfaceType:
 			typeTree.Elemtype = "interface"
 			o.createMethodsForInterface(typedType, typedNode.Name.Name)
+		case *ast.StructType:
+			o.createFieldsForStruct(typedType, typedNode.Name.Name)
+
 		}
 
 		o.Entries = append(o.Entries, typeTree)
@@ -101,6 +101,20 @@ func (o *FileOutline) createMethodsForInterface(iface *ast.InterfaceType, receiv
 		ifaceFunc := newEntry()
 		ifaceFunc.Name = field.Names[0].Name
 		ifaceFunc.Elemtype = "func"
+		ifaceFunc.Receiver = receiver
+		o.setPosition(ifaceFunc, field.Type.Pos())
+
+		o.Entries = append(o.Entries, ifaceFunc)
+	}
+}
+func (o *FileOutline) createFieldsForStruct(structType *ast.StructType, receiver string) {
+	for _, field := range structType.Fields.List {
+		if len(field.Names) < 1 {
+			continue
+		}
+		ifaceFunc := newEntry()
+		ifaceFunc.Name = field.Names[0].Name
+		ifaceFunc.Elemtype = "field"
 		ifaceFunc.Receiver = receiver
 		o.setPosition(ifaceFunc, field.Type.Pos())
 
